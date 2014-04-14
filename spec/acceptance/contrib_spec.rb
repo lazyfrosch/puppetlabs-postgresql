@@ -1,6 +1,6 @@
-require 'spec_helper_system'
+require 'spec_helper_acceptance'
 
-describe 'postgresql::server::contrib:' do
+describe 'postgresql::server::contrib:', :unless => UNSUPPORTED_PLATFORMS.include?(fact('osfamily')) do
   after :all do
     # Cleanup after tests have ran, remove both contrib and server as contrib
     # pulls in the server based packages.
@@ -13,9 +13,7 @@ describe 'postgresql::server::contrib:' do
       }
     EOS
 
-    puppet_apply(pp) do |r|
-      r.exit_code.should_not == 1
-    end
+    apply_manifest(pp, :catch_failures => true)
   end
 
   it 'test loading class with no parameters' do
@@ -24,10 +22,7 @@ describe 'postgresql::server::contrib:' do
       class { 'postgresql::server::contrib': }
     EOS
 
-    puppet_apply(pp) do |r|
-      r.exit_code.should == 2
-      r.refresh
-      r.exit_code.should == 0
-    end
+    apply_manifest(pp, :catch_failures => true)
+    apply_manifest(pp, :catch_changes => true)
   end
 end

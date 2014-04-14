@@ -1,33 +1,24 @@
-require 'spec_helper_system'
+require 'spec_helper_acceptance'
 
-describe 'postgresql::server::tablespace:' do
+describe 'postgresql::server::tablespace:', :unless => UNSUPPORTED_PLATFORMS.include?(fact('osfamily')) do
   after :all do
     # Cleanup after tests have ran
-    puppet_apply("class { 'postgresql::server': ensure => absent }") do |r|
-      r.exit_code.should_not == 1
-    end
+    apply_manifest("class { 'postgresql::server': ensure => absent }", :catch_failures => true)
   end
 
   it 'should idempotently create tablespaces and databases that are using them' do
     pp = <<-EOS.unindent
       class { 'postgresql::server': }
 
-      file { '/tmp/pg_tablespaces':
+      file { '/tmp/postgres/pg_tablespaces':
         ensure => 'directory',
         owner  => 'postgres',
         group  => 'postgres',
         mode   => '0700',
-      }~>
-      # This works around rubies that lack Selinux support, I'm looking at you RHEL5
-      exec { "chcon -u system_u -r object_r -t postgresql_db_t /tmp/pg_tablespaces":
-        refreshonly => true,
-        path        => "/bin:/usr/bin",
-        onlyif      => "which chcon",
-        before      => File["/tmp/pg_tablespaces/space1", "/tmp/pg_tablespaces/space2"]
       }
 
       postgresql::server::tablespace { 'tablespace1':
-        location => '/tmp/pg_tablespaces/space1',
+        location => '/tmp/postgres/pg_tablespaces/space1',
       }
       postgresql::server::database { 'tablespacedb1':
         encoding   => 'utf8',
@@ -43,7 +34,7 @@ describe 'postgresql::server::tablespace:' do
         password_hash => postgresql_password('spcuser', 'spcuser'),
       }
       postgresql::server::tablespace { 'tablespace2':
-        location => '/tmp/pg_tablespaces/space2',
+        location => '/tmp/postgres/pg_tablespaces/space2',
         owner    => 'spcuser',
       }
       postgresql::server::database { 'tablespacedb3':
@@ -52,23 +43,25 @@ describe 'postgresql::server::tablespace:' do
       }
     EOS
 
-    puppet_apply(pp) do |r|
-      r.exit_code.should_not == 1
-      r.refresh
-      r.exit_code.should == 0
+    shell('mkdir -p /tmp/postgres')
+    # Apply appropriate selinux labels
+    if fact('osfamily') == 'RedHat'
+      if shell('getenforce').stdout =~ /Enforcing/
+        shell('chcon -Rv --type=postgresql_db_t /tmp/postgres')
+      end
     end
+    apply_manifest(pp, :catch_failures => true)
+    apply_manifest(pp, :catch_changes => true)
 
     # Check that databases use correct tablespaces
     psql('--command="select ts.spcname from pg_database db, pg_tablespace ts where db.dattablespace = ts.oid and db.datname = \'"\'tablespacedb1\'"\'"') do |r|
-      r.stdout.should =~ /tablespace1/
-      r.stderr.should == ''
-      r.exit_code.should == 0
+      expect(r.stdout).to match(/tablespace1/)
+      expect(r.stderr).to eq('')
     end
 
     psql('--command="select ts.spcname from pg_database db, pg_tablespace ts where db.dattablespace = ts.oid and db.datname = \'"\'tablespacedb3\'"\'"') do |r|
-      r.stdout.should =~ /tablespace2/
-      r.stderr.should == ''
-      r.exit_code.should == 0
+      expect(r.stdout).to match(/tablespace2/)
+      expect(r.stderr).to eq('')
     end
   end
 end

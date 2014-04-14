@@ -219,6 +219,7 @@ Classes:
 * [postgresql::server](#class-postgresqlserver)
 * [postgresql::server::plperl](#class-postgresqlserverplperl)
 * [postgresql::server::contrib](#class-postgresqlservercontrib)
+* [postgresql::server::postgis](#class-postgresqlserverpostgis)
 
 Resources:
 
@@ -284,10 +285,13 @@ This setting can be used to override the default postgresql PL/perl package name
 This setting can be used to override the default postgresql Python package name. If not specified, the module will use whatever package name is the default for your OS distro.
 
 ####`service_name`
-This setting can be used to override the default postgresql service provider. If not specified, the module will use whatever service name is the default for your OS distro.
+This setting can be used to override the default postgresql service name. If not specified, the module will use whatever service name is the default for your OS distro.
+
+####`service_provider`
+This setting can be used to override the default postgresql service provider. If not specified, the module will use whatever service provider is the default for your OS distro.
 
 ####`service_status`
-This setting can be used to override the default status check command for your PostgreSQL service. If not specified, the module will use whatever service name is the default for your OS distro.
+This setting can be used to override the default status check command for your PostgreSQL service. If not specified, the module will use whatever service status is the default for your OS distro.
 
 ####`default_database`
 This setting is used to specify the name of the default database to connect with. On most systems this will be "postgres".
@@ -319,6 +323,9 @@ This setting can be used to override the default postgresql configuration direct
 ####`bindir`
 This setting can be used to override the default postgresql binaries directory for the target platform. If not specified, the module will use whatever directory is the default for your OS distro.
 
+####`xlogdir`
+This setting can be used to override the default postgresql xlog directory. If not specified the module will use initdb's default path.
+
 ####`user`
 This setting can be used to override the default postgresql super user and owner of postgresql related files in the file system. If not specified, the module will use the user name 'postgres'.
 
@@ -330,6 +337,9 @@ The version of PostgreSQL to install/manage. This is a simple way of providing a
 
 Defaults to your operating system default.
 
+####`postgis_version`
+The version of PostGIS to install if you install PostGIS. Defaults to the lowest available with the version of PostgreSQL to be installed.
+
 ####`needs_initdb`
 This setting can be used to explicitly call the initdb operation after server package is installed and before the postgresql service is started. If not specified, the module will decide whether to call initdb or not depending on your OS distro.
 
@@ -338,6 +348,10 @@ This will set the default encoding encoding for all databases created with this 
 
 ####`locale`
 This will set the default database locale for all databases created with this module. On certain operating systems this will be used during the `template1` initialization as well so it becomes a default outside of the module as well. Defaults to `undef` which is effectively `C`.
+
+#####Debian
+
+On Debian you'll need to ensure that the 'locales-all' package is installed for full functionality of Postgres.
 
 ####`firewall_supported`
 This allows you to override the automated detection to see if your OS supports the `firewall` module.
@@ -393,7 +407,7 @@ List of strings for access control for connection method, users, databases, IPv4
 ####`ipv6acls`
 List of strings for access control for connection method, users, databases, IPv6 addresses; see [postgresql documentation](http://www.postgresql.org/docs/9.2/static/auth-pg-hba-conf.html) about `pg_hba.conf` for information (please note that the link will take you to documentation for the most recent version of Postgres, however links for earlier versions can be found on that page).
 
-####`inidb_path`
+####`initdb_path`
 Path to the `initdb` command.
 
 ####`createdb_path`
@@ -429,6 +443,10 @@ This will set the default encoding encoding for all databases created with this 
 ####`locale`
 This will set the default database locale for all databases created with this module. On certain operating systems this will be used during the `template1` initialization as well so it becomes a default outside of the module as well. Defaults to `undef` which is effectively `C`.
 
+#####Debian
+
+On Debian you'll need to ensure that the 'locales-all' package is installed for full functionality of Postgres.
+
 ####`manage_firewall`
 This value defaults to `false`. Many distros ship with a fairly restrictive firewall configuration which will block the port that postgres tries to listen on. If you'd like for the puppet module to open this port for you (using the [puppetlabs-firewall](http://forge.puppetlabs.com/puppetlabs/firewall) module), change this value to true. Check the documentation for `puppetlabs/firewall` to ensure the rest of the global setup is applied, to ensure things like persistence and global rules are set correctly.
 
@@ -451,11 +469,13 @@ The ensure parameter passed on to postgresql client package resource.
 Installs the postgresql contrib package.
 
 ####`package_name`
-The name of the postgresql client package.
+The name of the postgresql contrib package.
 
 ####`package_ensure`
 The ensure parameter passed on to postgresql contrib package resource.
 
+###Class: postgresql::server::postgis
+Installs the postgresql postgis packages.
 
 ###Class: postgresql::lib::devel
 Installs the packages containing the development libraries for PostgreSQL.
@@ -528,6 +548,9 @@ For example, to create a database called `test1` with a corresponding user of th
 
 ####`namevar`
 The namevar for the resource designates the name of the database.
+
+####`dbname`
+The name of the database to be created. Defaults to `namevar`.
 
 ####`user`
 User to create and assign access to the database upon creation. Mandatory.
@@ -671,6 +694,9 @@ Whether to grant the ability to create new roles with this role. Defaults to `fa
 
 ####`login`
 Whether to grant login capability for the new role. Defaults to `false`.
+
+####`inherit`
+Whether to grant inherit capability for the new role. Defaults to `true`.
 
 ####`superuser`
 Whether to grant super user capability for the new role. Defaults to `false`.

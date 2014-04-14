@@ -1,11 +1,9 @@
-require 'spec_helper_system'
+require 'spec_helper_acceptance'
 
-describe 'server:' do
+describe 'server:', :unless => UNSUPPORTED_PLATFORMS.include?(fact('osfamily')) do
   after :all do
     # Cleanup after tests have ran
-    puppet_apply("class { 'postgresql::server': ensure => absent }") do |r|
-      r.exit_code.should_not == 1
-    end
+    apply_manifest("class { 'postgresql::server': ensure => absent }", :catch_failures => true)
   end
 
   it 'test loading class with no parameters' do
@@ -13,11 +11,8 @@ describe 'server:' do
       class { 'postgresql::server': }
     EOS
 
-    puppet_apply(pp) do |r|
-      r.exit_code.should == 2
-      r.refresh
-      r.exit_code.should == 0
-    end
+    apply_manifest(pp, :catch_failures => true)
+    apply_manifest(pp, :catch_changes => true)
   end
 
   describe port(5432) do
@@ -33,12 +28,10 @@ describe 'server:' do
         }
       EOS
 
-      puppet_apply(pp) do |r|
-        [0,2].should include(r.exit_code)
-        r.stdout.should =~ /\[set_postgres_postgrespw\]\/returns: executed successfully/
-        r.refresh
-        r.exit_code.should == 0
+      apply_manifest(pp, :catch_failures => true) do |r|
+        expect(r.stdout).to match(/\[set_postgres_postgrespw\]\/returns: executed successfully/)
       end
+      apply_manifest(pp, :catch_changes => true)
 
       pp = <<-EOS.unindent
         class { 'postgresql::server':
@@ -47,37 +40,19 @@ describe 'server:' do
         }
       EOS
 
-      puppet_apply(pp) do |r|
-        [0,2].should include(r.exit_code)
-        r.stdout.should =~ /\[set_postgres_postgrespw\]\/returns: executed successfully/
-        r.refresh
-        r.exit_code.should == 0
+      apply_manifest(pp, :catch_failures => true) do |r|
+        expect(r.stdout).to match(/\[set_postgres_postgrespw\]\/returns: executed successfully/)
       end
+      apply_manifest(pp, :catch_changes => true)
 
     end
   end
 end
 
-describe 'server without defaults:' do
-  before :all do
-    puppet_apply(<<-EOS.unindent)
-      if($::operatingsystem =~ /Debian|Ubuntu/) {
-        # Need to make sure the correct utf8 locale is ready for our
-        # non-standard tests
-        file { '/etc/locale.gen':
-          content => "en_US ISO-8859-1\nen_NG UTF-8\nen_US UTF-8\n",
-        }~>
-        exec { '/usr/sbin/locale-gen':
-          logoutput => true,
-          refreshonly => true,
-        }
-      }
-    EOS
-  end
-
+describe 'server without defaults:', :unless => UNSUPPORTED_PLATFORMS.include?(fact('osfamily')) do
   context 'test installing non-default version of postgresql' do
     after :all do
-      psql('--command="drop database postgresql_test_db" postgres')
+      psql('--command="drop database postgresql_test_db" postgres', 'postgres')
       pp = <<-EOS.unindent
         class { 'postgresql::globals':
           ensure              => absent,
@@ -88,9 +63,7 @@ describe 'server without defaults:' do
           ensure => absent,
         }
       EOS
-      puppet_apply(pp) do |r|
-        r.exit_code.should_not == 1
-      end
+      apply_manifest(pp, :catch_failures => true)
     end
 
     it 'perform installation and create a db' do
@@ -100,6 +73,7 @@ describe 'server without defaults:' do
           manage_package_repo => true,
           encoding            => 'UTF8',
           locale              => 'en_US.UTF-8',
+          xlogdir             => '/tmp/pg_xlogs',
         }
         class { "postgresql::server": }
         postgresql::server::db { "postgresql_test_db":
@@ -111,15 +85,15 @@ describe 'server without defaults:' do
         }
       EOS
 
-      puppet_apply(pp) do |r|
-        r.exit_code.should == 2
-        r.refresh
-        r.exit_code.should == 0
+      apply_manifest(pp, :catch_failures => true)
+      apply_manifest(pp, :catch_changes => true)
+
+      shell('test -d /tmp/pg_xlogs') do |r|
+        expect(r.stdout).to eq('')
+        expect(r.stderr).to eq('')
       end
 
-      psql('postgresql_test_db --command="select datname from pg_database limit 1"') do |r|
-        r.exit_code.should == 0
-      end
+      psql('postgresql_test_db --command="select datname from pg_database limit 1"')
     end
 
     describe port(5432) do
@@ -127,14 +101,12 @@ describe 'server without defaults:' do
     end
   end
 
-  unless ((node.facts['osfamily'] == 'RedHat' and node.facts['lsbmajdistrelease'] == '5') ||
-    node.facts['osfamily'] == 'Debian')
+  unless ((fact('osfamily') == 'RedHat' and fact('lsbmajdistrelease') == '5') ||
+    fact('osfamily') == 'Debian')
 
     context 'override locale and encoding' do
       after :each do
-        puppet_apply "class { 'postgresql::server': ensure => absent }" do |r|
-          r.exit_code.should_not == 1
-        end
+        apply_manifest("class { 'postgresql::server': ensure => absent }", :catch_failures => true)
       end
 
       it 'perform installation with different locale and encoding' do
@@ -145,37 +117,32 @@ describe 'server without defaults:' do
           }
         EOS
 
-        puppet_apply(pp) do |r|
-          r.exit_code.should == 2
-          r.refresh
-          r.exit_code.should == 0
-        end
+        apply_manifest(pp, :catch_failures => true)
+        apply_manifest(pp, :catch_changes => true)
 
         # Remove db first, if it exists for some reason
-        shell('su postgres -c "dropdb test1"')
+        shell('su postgres -c "dropdb test1"', :acceptable_exit_codes => [0,1,2])
         shell('su postgres -c "createdb test1"')
         shell('su postgres -c \'psql -c "show lc_ctype" test1\'') do |r|
-          r.stdout.should =~ /en_NG/
+          expect(r.stdout).to match(/en_NG/)
         end
 
         shell('su postgres -c \'psql -c "show lc_collate" test1\'') do |r|
-          r.stdout.should =~ /en_NG/
+          expect(r.stdout).to match(/en_NG/)
         end
       end
     end
   end
 end
 
-describe 'server with firewall:' do
+describe 'server with firewall:', :unless => UNSUPPORTED_PLATFORMS.include?(fact('osfamily')) do
   after :all do
-    puppet_apply("class { 'postgresql::server': ensure => absent }") do |r|
-      r.exit_code.should_not == 1
-    end
+    apply_manifest("class { 'postgresql::server': ensure => absent }", :catch_failures => true)
   end
 
   context 'test installing postgresql with firewall management on' do
     it 'perform installation and make sure it is idempotent' do
-      pending('no support for firewall with fedora', :if => (node.facts['operatingsystem'] == 'Fedora'))
+      pending('no support for firewall with fedora', :if => (fact('operatingsystem') == 'Fedora'))
       pp = <<-EOS.unindent
         class { 'firewall': }
         class { "postgresql::server":
@@ -183,20 +150,15 @@ describe 'server with firewall:' do
         }
       EOS
 
-      puppet_apply(pp) do |r|
-        r.exit_code.should == 2
-        r.refresh
-        r.exit_code.should == 0
-      end
+      apply_manifest(pp, :catch_failures => true)
+      apply_manifest(pp, :catch_changes => true)
     end
   end
 end
 
-describe 'server without pg_hba.conf:' do
+describe 'server without pg_hba.conf:', :unless => UNSUPPORTED_PLATFORMS.include?(fact('osfamily')) do
   after :all do
-    puppet_apply("class { 'postgresql::server': ensure => absent }") do |r|
-      r.exit_code.should_not == 1
-    end
+    apply_manifest("class { 'postgresql::server': ensure => absent }", :catch_failures => true)
   end
 
   context 'test installing postgresql without pg_hba.conf management on' do
@@ -207,11 +169,8 @@ describe 'server without pg_hba.conf:' do
         }
       EOS
 
-      puppet_apply(pp) do |r|
-        r.exit_code.should == 2
-        r.refresh
-        r.exit_code.should == 0
-      end
+      apply_manifest(pp, :catch_failures => true)
+      apply_manifest(pp, :catch_changes => true)
     end
   end
 end

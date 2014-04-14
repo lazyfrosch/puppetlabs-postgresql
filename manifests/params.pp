@@ -2,13 +2,12 @@
 class postgresql::params inherits postgresql::globals {
   $ensure                     = true
   $version                    = $globals_version
+  $postgis_version            = $globals_postgis_version
   $listen_addresses           = 'localhost'
   $ip_mask_deny_postgres_user = '0.0.0.0/0'
   $ip_mask_allow_all_users    = '127.0.0.1/32'
   $ipv4acls                   = []
   $ipv6acls                   = []
-  $user                       = pick($user, 'postgres')
-  $group                      = pick($group, 'postgres')
   $encoding                   = $encoding
   $locale                     = $locale
   $service_provider           = $service_provider
@@ -18,8 +17,12 @@ class postgresql::params inherits postgresql::globals {
   # Amazon Linux's OS Family is 'Linux', operating system 'Amazon'.
   case $::osfamily {
     'RedHat', 'Linux': {
+      $user               = pick($user, 'postgres')
+      $group              = pick($group, 'postgres')
       $needs_initdb       = pick($needs_initdb, true)
       $firewall_supported = pick($firewall_supported, true)
+      $version_parts      = split($version, '[.]')
+      $package_version    = "${version_parts[0]}${version_parts[1]}"
 
       if $version == $default_version {
         $client_package_name  = pick($client_package_name, 'postgresql')
@@ -36,8 +39,6 @@ class postgresql::params inherits postgresql::globals {
         }
         $confdir              = pick($confdir, $datadir)
       } else {
-        $version_parts        = split($version, '[.]')
-        $package_version      = "${version_parts[0]}${version_parts[1]}"
         $client_package_name  = pick($client_package_name, "postgresql${package_version}")
         $server_package_name  = pick($server_package_name, "postgresql${package_version}-server")
         $contrib_package_name = pick($contrib_package_name,"postgresql${package_version}-contrib")
@@ -56,6 +57,14 @@ class postgresql::params inherits postgresql::globals {
 
       $service_status      = $service_status
       $python_package_name = pick($python_package_name, 'python-psycopg2')
+
+      $postgis_package_name = pick(
+        $postgis_package_name,
+        versioncmp($postgis_version, '2') ? {
+          '-1'    => "postgis${package_version}",
+          default => "postgis2_${package_version}",
+        }
+      )
     }
 
     'Archlinux': {
@@ -64,6 +73,8 @@ class postgresql::params inherits postgresql::globals {
       # so they can set it themself
       $firewall_supported = pick($firewall_supported, true)
       $needs_initdb       = pick($needs_initdb, true)
+      $user               = pick($user, 'postgres')
+      $group              = pick($group, 'postgres')
 
       # Archlinux doesn't have a client-package but has a libs package which
       # pulls in postgresql server
@@ -87,6 +98,8 @@ class postgresql::params inherits postgresql::globals {
     }
 
     'Debian': {
+      $user               = pick($user, 'postgres')
+      $group              = pick($group, 'postgres')
 
       if $manage_package_repo == true {
         $needs_initdb = pick($needs_initdb, true)
@@ -106,6 +119,13 @@ class postgresql::params inherits postgresql::globals {
       $client_package_name  = pick($client_package_name, "postgresql-client-${version}")
       $server_package_name  = pick($server_package_name, "postgresql-${version}")
       $contrib_package_name = pick($contrib_package_name, "postgresql-contrib-${version}")
+      $postgis_package_name = pick(
+        $postgis_package_name,
+        versioncmp($postgis_version, '2') ? {
+          '-1'    => "postgresql-${version}-postgis",
+          default => "postgresql-${version}-postgis-${postgis_version}",
+        }
+      )
       $devel_package_name   = pick($devel_package_name, 'libpq-dev')
       $java_package_name    = pick($java_package_name, 'libpostgresql-jdbc-java')
       $plperl_package_name  = pick($plperl_package_name, "postgresql-plperl-${version}")
@@ -118,6 +138,29 @@ class postgresql::params inherits postgresql::globals {
       $psql_path            = pick($psql_path, "/usr/bin/psql")
 
       $firewall_supported   = pick($firewall_supported, true)
+    }
+
+    'FreeBSD': {
+      $user                 = pick($user, 'pgsql')
+      $group                = pick($group, 'pgsql')
+
+      $client_package_name  = pick($client_package_name, "databases/postgresql${version}-client")
+      $server_package_name  = pick($server_package_name, "databases/postgresql${version}-server")
+      $contrib_package_name = pick($contrib_package_name, "databases/postgresql${version}-contrib")
+      $devel_package_name   = pick($devel_package_name, 'databases/postgresql-libpqxx3')
+      $java_package_name    = pick($java_package_name, 'databases/postgresql-jdbc')
+      $plperl_package_name  = pick($plperl_package_name, "databases/postgresql${version}-plperl")
+      $python_package_name  = pick($python_package_name, 'databases/py-psycopg2')
+
+      $service_name         = pick($service_name, 'postgresql')
+      $bindir               = pick($bindir, '/usr/local/bin')
+      $datadir              = pick($datadir, '/usr/local/pgsql/data')
+      $confdir              = pick($confdir, $datadir)
+      $service_status       = pick($service_status, "/usr/local/etc/rc.d/${service_name} status")
+      $psql_path            = pick($psql_path, "${bindir}/psql")
+
+      $firewall_supported   = pick($firewall_supported, false)
+      $needs_initdb         = pick($needs_initdb, true)
     }
 
     default: {

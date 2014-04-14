@@ -8,12 +8,14 @@ describe 'postgresql::server', :type => :class do
       :operatingsystemrelease => '6.0',
       :concat_basedir => tmpfilename('server'),
       :kernel => 'Linux',
+      :id => 'root',
+      :path => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
     }
   end
 
   describe 'with no parameters' do
-    it { should include_class("postgresql::params") }
-    it { should include_class("postgresql::server") }
+    it { should contain_class("postgresql::params") }
+    it { should contain_class("postgresql::server") }
     it 'should validate connection' do
       should contain_postgresql__validate_db_connection('validate_service_is_running')
     end
@@ -37,6 +39,7 @@ describe 'postgresql::server', :type => :class do
       {
         :ensure => 'absent',
         :datadir => '/my/path',
+        :xlogdir => '/xlog/path',
       }
     end
 
@@ -54,6 +57,12 @@ describe 'postgresql::server', :type => :class do
 
     it 'should remove datadir' do
       should contain_file('/my/path').with({
+        :ensure => 'absent',
+      })
+    end
+
+    it 'should remove xlogdir' do
+      should contain_file('/xlog/path').with({
         :ensure => 'absent',
       })
     end

@@ -1,6 +1,6 @@
 require 'spec_helper'
 
-describe 'postgresql::server::contrib', :type => :class do
+describe 'postgresql::server::postgis', :type => :class do
   let :pre_condition do
     "class { 'postgresql::server': }"
   end
@@ -11,7 +11,7 @@ describe 'postgresql::server::contrib', :type => :class do
       :operatingsystem => 'Debian',
       :operatingsystemrelease => '6.0',
       :kernel => 'Linux',
-      :concat_basedir => tmpfilename('contrib'),
+      :concat_basedir => tmpfilename('postgis'),
       :id => 'root',
       :path => '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
     }
@@ -26,7 +26,7 @@ describe 'postgresql::server::contrib', :type => :class do
     end
 
     it 'should create package with correct params' do
-      should contain_package('postgresql-contrib').with({
+      should contain_package('postgresql-postgis').with({
         :ensure => 'absent',
         :name => 'mypackage',
         :tag => 'postgresql',
@@ -36,7 +36,7 @@ describe 'postgresql::server::contrib', :type => :class do
 
   describe 'with no parameters' do
     it 'should create package with postgresql tag' do
-      should contain_package('postgresql-contrib').with({
+      should contain_package('postgresql-postgis').with({
         :tag => 'postgresql',
       })
     end
